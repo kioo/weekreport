@@ -29,9 +29,9 @@ def _job_send_weekly_email():
     finally:
         db.close()
     subject = f"团队周报汇总 - {datetime.now():%Y-%m-%d}"
-    logger.info("Trigger weekly email job subject=%s", subject)
+    logger.warning("Trigger weekly email job subject=%s", subject)
     ok = send_html_email(subject, html)
-    logger.info("Weekly email sent ok=%s", ok)
+    logger.warning("Weekly email sent ok=%s", ok)
 
 
 def start_scheduler():
@@ -72,4 +72,31 @@ def schedule_dingtalk_once(text: str, delay_seconds: int = 0) -> dict:
         return {"scheduled": True, "run_at": run_time.isoformat(), "delay_seconds": delay_seconds}
     except Exception:
         logger.exception("Failed to schedule one-off DingTalk.")
+        return {"scheduled": False, "run_at": None, "delay_seconds": delay_seconds}
+
+
+def schedule_email_once(delay_seconds: int = 0) -> dict:
+    """
+    添加一次性周报汇总邮件发送任务，默认立即执行；可设置延迟秒数。
+    返回计划信息：是否成功、计划时间。
+    """
+    global _scheduler
+    if not _scheduler:
+        start_scheduler()
+    try:
+        delay_seconds = max(0, int(delay_seconds))
+        run_time = datetime.now() + timedelta(seconds=delay_seconds)
+        logger.info(
+            "Schedule one-off Weekly Email. delay=%s run_at=%s",
+            delay_seconds,
+            run_time.isoformat(),
+        )
+        _scheduler.add_job(
+            _job_send_weekly_email,
+            DateTrigger(run_date=run_time),
+        )
+        logger.info("One-off Weekly Email scheduled at %s", run_time.isoformat())
+        return {"scheduled": True, "run_at": run_time.isoformat(), "delay_seconds": delay_seconds}
+    except Exception:
+        logger.exception("Failed to schedule one-off Weekly Email.")
         return {"scheduled": False, "run_at": None, "delay_seconds": delay_seconds}

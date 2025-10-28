@@ -47,6 +47,8 @@
       <input type="hidden" id="memberName" />
       <!-- 测试钉钉消息按钮：安排5秒后发送测试消息 -->
       <button type="button" id="testDingTalkBtn" style="padding:8px 12px;border:none;border-radius:8px;background:#10b981;color:#fff;cursor:pointer;">测试钉钉消息</button>
+      <!-- 测试邮件发送按钮：安排2秒后触发周报邮件发送 -->
+      <button type="button" id="testEmailBtn" style="padding:8px 12px;margin-left:8px;border:none;border-radius:8px;background:#3b82f6;color:#fff;cursor:pointer;">测试邮件发送</button>
     </div>
 
     <form id="reportForm" action="/submit" method="post">
@@ -185,6 +187,26 @@
         } finally {
           btn.disabled = false;
           btn.textContent = '测试钉钉消息';
+        }
+      });
+    }
+
+    // 测试邮件发送按钮逻辑
+    const testEmailBtn = document.getElementById('testEmailBtn');
+    if (testEmailBtn) {
+      testEmailBtn.addEventListener('click', async function(){
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = '已安排...';
+        try {
+          const resp = await fetch(`/admin/email/schedule?delay_seconds=2`);
+          const data = await resp.json();
+          alert(`周报邮件已安排：${data.scheduled ? '是' : '否'}\n执行时间：${data.run_at || '-'}`);
+        } catch (err) {
+          alert('调用失败，请检查服务器或网络。');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '测试邮件发送';
         }
       });
     }

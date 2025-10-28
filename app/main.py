@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from .db import SessionLocal, Report, Member, init_db
 from .utils.summary import generate_weekly_summary
-from .services.scheduler import start_scheduler, schedule_dingtalk_once
+from .services.scheduler import start_scheduler, schedule_dingtalk_once, schedule_email_once
 from datetime import datetime, timedelta
 import logging
 from dotenv import load_dotenv
@@ -140,4 +140,20 @@ async def schedule_dingtalk_post(
 ):
     api_logger.info("API POST schedule dingtalk: delay=%s text_len=%s", delay_seconds, len(text or ""))
     info = schedule_dingtalk_once(text=text, delay_seconds=delay_seconds)
+    return JSONResponse(content=info)
+
+
+# 便于测试的周报汇总邮件定时发送接口：支持GET/POST
+@app.get("/admin/email/schedule")
+async def schedule_email_get(delay_seconds: int = 0):
+    """通过浏览器访问进行快速测试：/admin/email/schedule?delay_seconds=5"""
+    api_logger.info("API GET schedule weekly email: delay=%s", delay_seconds)
+    info = schedule_email_once(delay_seconds=delay_seconds)
+    return JSONResponse(content=info)
+
+
+@app.post("/admin/email/schedule")
+async def schedule_email_post(delay_seconds: int = Form(0)):
+    api_logger.info("API POST schedule weekly email: delay=%s", delay_seconds)
+    info = schedule_email_once(delay_seconds=delay_seconds)
     return JSONResponse(content=info)
