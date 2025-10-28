@@ -1,0 +1,39 @@
+# Project-specific
+weekreports.db
+
+# Environment files
+.env
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache/files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Build & packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Logs
+*.log
+
+# IDE/editor
+.vscode/
+.idea/
+
+# OS-specific
+.DS_Store
+Thumbs.db

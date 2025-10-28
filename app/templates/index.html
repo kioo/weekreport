@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>周报填写</title>
+  <style>
+    :root { --bg:#f7f8fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --primary:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Helvetica, Arial; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 36px 18px; }
+    .title { font-weight: 700; font-size: 28px; text-align: center; margin-bottom: 24px; }
+    .card { background: var(--card); border-radius: 14px; box-shadow: 0 8px 20px rgba(0,0,0,0.06); padding: 18px 20px; margin-bottom: 18px; }
+    .section-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .item-title { font-weight: 700; margin: 12px 0; }
+    label { display:block; font-weight:600; margin:10px 0 6px; }
+    input, textarea, select { width: 100%; border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:14px; background:#fafafa; }
+    textarea { min-height:110px; background:#fafafa; }
+    .row { display:grid; grid-template-columns: 1fr; gap:12px; }
+    .split-2 { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .muted { color: var(--muted); }
+    .add-link { color: var(--primary); font-weight:600; cursor:pointer; user-select:none; display:inline-block; margin-top:6px; }
+    .slider-wrap { display:flex; align-items:center; gap:14px; }
+    input[type=range] { width: 100%; }
+    .percent { min-width:48px; text-align:right; color: var(--muted); }
+    .footer-actions { position: sticky; bottom: 0; background: transparent; padding: 16px 0; }
+    .submit { width:100%; border:none; border-radius:12px; padding:12px 16px; font-weight:700; background: var(--primary); color:#fff; font-size:16px; cursor:pointer; }
+    .small { font-size:12px; color: var(--muted); }
+    .topbar { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-bottom:6px; }
+    .topbar input { width:220px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">周报填写</div>
+
+    <div class="topbar">
+      <span class="small">填写人</span>
+      <select id="memberSelect" style="width:220px;">
+        <option value="">请选择成员</option>
+        {% for member in members %}
+        <option value="{{ member.id }}" data-name="{{ member.name }}">
+          {{ member.name }}{% if member.department %} - {{ member.department }}{% endif %}{% if member.position %} ({{ member.position }}){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <input type="hidden" id="memberName" />
+      <!-- 测试钉钉消息按钮：安排5秒后发送测试消息 -->
+      <button type="button" id="testDingTalkBtn" style="padding:8px 12px;border:none;border-radius:8px;background:#10b981;color:#fff;cursor:pointer;">测试钉钉消息</button>
+    </div>
+
+    <form id="reportForm" action="/submit" method="post">
+      <!-- 本周工作内容 -->
+      <div class="card">
+        <div class="section-title">本周工作内容</div>
+        <div id="workItems"></div>
+        <span class="add-link" id="addWork">+ 添加另一项</span>
+      </div>
+
+      <!-- 下周待办 -->
+      <div class="card">
+        <div class="section-title">下周待办</div>
+        <div id="planItems"></div>
+        <span class="add-link" id="addPlan">+ 添加另一项</span>
+      </div>
+
+      <!-- 风险与问题 -->
+      <div class="card">
+        <div class="section-title">风险与问题（可选）</div>
+        <label>风险与问题</label>
+        <textarea id="risksTextarea" placeholder="是否存在阻塞、外部依赖或需协助的事项"></textarea>
+      </div>
+
+      <div class="footer-actions">
+        <button class="submit" type="submit">提交周报</button>
+      </div>
+
+      <!-- 隐藏字段用于传递聚合数据 -->
+      <input type="hidden" id="member_id" name="member_id">
+      <input type="hidden" id="member_name" name="member_name">
+      <input type="hidden" id="project" name="project">
+      <input type="hidden" id="work_desc" name="work_desc">
+      <input type="hidden" id="progress" name="progress">
+      <input type="hidden" id="next_week_plan" name="next_week_plan">
+      <input type="hidden" id="risks" name="risks">
+    </form>
+
+    <div class="muted" style="text-align:center;margin-top:8px;">
+      <a href="/admin/summary" target="_blank">查看本周汇总</a>
+    </div>
+  </div>
+
+  <script>
+    const projectOptions = [
+      "支付系统升级", "核心平台", "移动端App", "数据治理", "运营后台"
+    ];
+
+    function createWorkItem(index){
+      const wrap = document.createElement('div');
+      wrap.className = 'card';
+      wrap.style.padding = '12px';
+      wrap.innerHTML = `
+        <div class="item-title">工作项 ${index}</div>
+        <div class="row">
+          <div>
+            <label>所属项目</label>
+            <select class="work-project">${projectOptions.map(o=>`<option>${o}</option>`).join('')}</select>
+          </div>
+          <div>
+            <label>工作描述</label>
+            <textarea class="work-desc" placeholder="主要产出、进展、模块名称等"></textarea>
+          </div>
+          <div>
+            <label>进度</label>
+            <div class="slider-wrap">
+              <input type="range" class="work-progress" min="0" max="100" value="0">
+              <span class="percent">0%</span>
+            </div>
+          </div>
+        </div>`;
+
+      const range = wrap.querySelector('.work-progress');
+      const percent = wrap.querySelector('.percent');
+      range.addEventListener('input', ()=>{ percent.textContent = range.value + '%'; });
+      return wrap;
+    }
+
+    function createPlanItem(index){
+      const wrap = document.createElement('div');
+      wrap.className = 'card';
+      wrap.style.padding = '12px';
+      wrap.innerHTML = `
+        <div class="item-title">计划项 ${index}</div>
+        <div class="row">
+          <div>
+            <label>计划工作内容</label>
+            <textarea class="plan-desc" placeholder="计划任务与目标"></textarea>
+          </div>
+          <div class="split-2">
+            <div>
+              <label>预计完成时间</label>
+              <input type="date" class="plan-date" />
+            </div>
+          </div>
+        </div>`;
+      return wrap;
+    }
+
+    const workItems = document.getElementById('workItems');
+    const planItems = document.getElementById('planItems');
+
+    function addWork(){
+      const idx = workItems.children.length + 1;
+      workItems.appendChild(createWorkItem(idx));
+    }
+    function addPlan(){
+      const idx = planItems.children.length + 1;
+      planItems.appendChild(createPlanItem(idx));
+    }
+
+    document.getElementById('addWork').addEventListener('click', addWork);
+    document.getElementById('addPlan').addEventListener('click', addPlan);
+
+    // 初始化各一项
+    addWork();
+    addPlan();
+
+    // 测试钉钉消息按钮逻辑
+    const testBtn = document.getElementById('testDingTalkBtn');
+    if (testBtn) {
+      testBtn.addEventListener('click', async function(){
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = '已安排...';
+        const memberSelect = document.getElementById('memberSelect');
+        const selected = memberSelect.options[memberSelect.selectedIndex];
+        const name = selected ? selected.getAttribute('data-name') : '';
+        const text = name ? `测试消息：由 ${name} 触发` : '这是一条测试钉钉消息';
+        try {
+          const resp = await fetch(`/admin/dingtalk/schedule?text=${encodeURIComponent(text)}&delay_seconds=5`);
+          const data = await resp.json();
+          alert(`钉钉消息已安排：${data.scheduled ? '是' : '否'}\n执行时间：${data.run_at || '-'}`);
+        } catch (err) {
+          alert('调用失败，请检查服务器或网络。');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = '测试钉钉消息';
+        }
+      });
+    }
+
+    document.getElementById('reportForm').addEventListener('submit', function(e){
+      // 聚合数据以适配后端当前字段结构
+      const memberSelect = document.getElementById('memberSelect');
+      const selectedOption = memberSelect.options[memberSelect.selectedIndex];
+      const memberId = memberSelect.value;
+      const name = selectedOption ? selectedOption.getAttribute('data-name') : '';
+      
+      if(!memberId || !name){
+        e.preventDefault();
+        alert('请选择"填写人"。');
+        return;
+      }
+
+      const works = Array.from(workItems.children).map(w => ({
+        project: w.querySelector('.work-project').value,
+        desc: w.querySelector('.work-desc').value.trim(),
+        progress: parseInt(w.querySelector('.work-progress').value || '0', 10)
+      }));
+      const plans = Array.from(planItems.children).map(p => ({
+        desc: p.querySelector('.plan-desc').value.trim(),
+        date: p.querySelector('.plan-date').value
+      }));
+      const risks = document.getElementById('risksTextarea').value.trim();
+
+      // 生成聚合文本
+      const workDescText = works.map((w,i)=>`工作项${i+1}\n所属项目：${w.project}\n工作描述：${w.desc}\n进度：${w.progress}%`).join('\n\n');
+      const avgProgress = works.length ? Math.round(works.reduce((a,b)=>a+b.progress,0)/works.length) : 0;
+      const nextWeekText = plans.map((p,i)=>`计划项${i+1}\n计划工作内容：${p.desc}\n预计完成时间：${p.date||'-'}`).join('\n\n');
+
+      // 填充隐藏字段
+      document.getElementById('member_id').value = memberId;
+      document.getElementById('member_name').value = name;
+      document.getElementById('project').value = works[0]?.project || '综合';
+      document.getElementById('work_desc').value = workDescText;
+      document.getElementById('progress').value = String(avgProgress);
+      document.getElementById('next_week_plan').value = nextWeekText;
+      document.getElementById('risks').value = risks;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成员管理 - 智能周报助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #4f46e5;
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .nav-links a:hover {
+            background-color: rgba(255,255,255,0.2);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .add-member-form {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .add-member-form h2 {
+            margin-bottom: 20px;
+            color: #1e293b;
+            font-size: 18px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-group input {
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #4f46e5;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #4338ca;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .members-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .members-table th,
+        .members-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .members-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .members-table tr:hover {
+            background: #f8fafc;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-inactive {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>成员管理</h1>
+            <div class="nav-links">
+                <a href="/">返回首页</a>
+                <a href="/admin/summary">查看汇总</a>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- 添加成员表单 -->
+            <div class="add-member-form">
+                <h2>添加新成员</h2>
+                <form action="/admin/members/add" method="post">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="name">姓名 *</label>
+                            <input type="text" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="department">部门</label>
+                            <input type="text" id="department" name="department">
+                        </div>
+                        <div class="form-group">
+                            <label for="position">职位</label>
+                            <input type="text" id="position" name="position">
+                        </div>
+                        <div class="form-group">
+                            <label for="email">邮箱</label>
+                            <input type="email" id="email" name="email">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">添加成员</button>
+                </form>
+            </div>
+
+            <!-- 成员列表 -->
+            <div class="members-list">
+                <h2>成员列表</h2>
+                {% if members %}
+                <table class="members-table">
+                    <thead>
+                        <tr>
+                            <th>姓名</th>
+                            <th>部门</th>
+                            <th>职位</th>
+                            <th>邮箱</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for member in members %}
+                        <tr>
+                            <td>{{ member.name }}</td>
+                            <td>{{ member.department or '-' }}</td>
+                            <td>{{ member.position or '-' }}</td>
+                            <td>{{ member.email or '-' }}</td>
+                            <td>
+                                <span class="status-badge {% if member.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                    {% if member.is_active %}激活{% else %}停用{% endif %}
+                                </span>
+                            </td>
+                            <td>{{ member.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <div class="actions">
+                                    <button class="btn {% if member.is_active %}btn-danger{% else %}btn-success{% endif %}" 
+                                            onclick="toggleMemberStatus({{ member.id }}, {{ member.is_active }})">
+                                        {% if member.is_active %}停用{% else %}激活{% endif %}
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <p>暂无成员，请先添加成员。</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function toggleMemberStatus(memberId, currentStatus) {
+            const action = currentStatus ? '停用' : '激活';
+            if (!confirm(`确定要${action}该成员吗？`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/members/${memberId}/toggle`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    location.reload(); // 刷新页面显示最新状态
+                } else {
+                    alert('操作失败：' + (result.error || '未知错误'));
+                }
+            } catch (error) {
+                alert('操作失败：' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
