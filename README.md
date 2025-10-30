@@ -21,13 +21,26 @@ pip install -r requirements.txt
 2) 配置环境变量（可选）
 - 复制 `.env.example` 为 `.env` 并填写：
   - `DINGTALK_WEBHOOK` / `DINGTALK_SECRET`
-  - `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO`
+ - `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `MAIL_TO`
+  - 可选：启用大模型摘要（硅基流动）
+    - `LLM_SUMMARY_ENABLED=true`
+    - `SILICONFLOW_API_KEY=你的API密钥`
+    - `SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1`（如默认可省略）
+    - `SILICONFLOW_MODEL=Qwen2.5-14B-Instruct`（可替换为可用模型）
+    - `SILICONFLOW_TEMPERATURE=0.2` / `SILICONFLOW_MAX_TOKENS=1024`
 
 3) 启动开发服务器
 ```bash
 uvicorn app.main:app --reload
+# 所有人都能访问
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'
 ```
 访问 `http://localhost:8000/` 提交周报，`/admin/summary` 查看汇总。
+
+### 启用大模型摘要（硅基流动）
+- 在 `.env` 设置 `LLM_SUMMARY_ENABLED=true` 并填写 `SILICONFLOW_API_KEY`。
+- 系统会在“周五18:00 邮件任务”或通过 `/admin/email/schedule` 测试接口触发时，先用大模型生成本周摘要，再将摘要卡片插入到邮件正文顶部。
+- 如摘要接口失败或未启用，系统回退为原始汇总邮件，不影响发送。
 
 ## 部署建议
 - 可用 Docker 或系统服务化运行，确保 APScheduler 持续执行。
@@ -40,11 +53,10 @@ uvicorn app.main:app --reload
 ## 完成功能
 - 添加所属项目可以实时添加，支持删除，但是已经使用的项目不能删除。
 - 更新人员和项目
-## 待办
 - 钉钉发消息时可以指定 @ 某个用户
 - 添加周报总结使用大模型总结内容，并且按照模板格式输出
+## 待办
 - 将数据库换成 MySQL 或 PostgreSQL 等关系型数据库。
-- 添加周报总结使用大模型总结内容，并且按照模板格式输出
 - 添加项目维护，项目周期-填写周报时提供项目状况预览
 - 代码提交情况，bug 情况
 - 添加自动登录功能-微信，gmail，github

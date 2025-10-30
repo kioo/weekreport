@@ -165,12 +165,81 @@ async def add_project(
     except Exception as e:
         return JSONResponse(content={"error": f"添加项目失败: {str(e)}"}, status_code=400)
 
+
+@app.post("/admin/projects/{project_id}/update", dependencies=[Depends(require_admin)])
+async def update_project(
+    project_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """更新项目：支持 JSON 或表单提交，校验重名并更新日期字段"""
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    if not proj:
+        return JSONResponse(content={"error": "项目不存在"}, status_code=404)
+    try:
+        payload = {}
+        try:
+            payload = await request.json()
+        except Exception:
+            form = await request.form()
+            payload = dict(form)
+        new_name = (payload.get("name") or proj.name).strip()
+        description = (payload.get("description") or proj.description)
+        start_date = (payload.get("start_date") or None)
+        expected_end_date = (payload.get("expected_end_date") or None)
+
+        # 重名校验
+        if new_name != proj.name:
+            exists = db.query(Project).filter(Project.name == new_name).first()
+            if exists:
+                return JSONResponse(content={"error": "项目名称已存在"}, status_code=400)
+
+        # 解析日期
+        sd = None
+        ed = None
+        try:
+            if start_date:
+                sd = datetime.fromisoformat(start_date).date()
+        except Exception:
+            sd = None
+        try:
+            if expected_end_date:
+                ed = datetime.fromisoformat(expected_end_date).date()
+        except Exception:
+            ed = None
+
+        proj.name = new_name
+        proj.description = (description or None)
+        proj.start_date = sd
+        proj.expected_end_date = ed
+        db.commit()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(content={"error": f"更新失败: {str(e)}"}, status_code=400)
+
+
+@app.post("/admin/projects/{project_id}/delete", dependencies=[Depends(require_admin)])
+async def delete_project(project_id: int, db: Session = Depends(get_db)):
+    """删除项目：直接删除项目记录；如需保护可改为仅停用"""
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    if not proj:
+        return JSONResponse(content={"error": "项目不存在"}, status_code=404)
+    try:
+        db.delete(proj)
+        db.commit()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(content={"error": f"删除失败: {str(e)}"}, status_code=400)
+
 @app.post("/admin/members/add", dependencies=[Depends(require_admin)])
 async def add_member(
     name: str = Form(...),
     department: str = Form(""),
     position: str = Form(""),
     email: str = Form(""),
+    phone: str = Form(""),
     db: Session = Depends(get_db)
 ):
     """添加新成员"""
@@ -179,7 +248,8 @@ async def add_member(
             name=name,
             department=department,
             position=position,
-            email=email
+            email=email,
+            phone=(phone.strip() or None)
         )
         db.add(member)
         db.commit()
@@ -198,12 +268,74 @@ async def toggle_member_status(member_id: int, db: Session = Depends(get_db)):
     return JSONResponse(content={"error": "成员不存在"}, status_code=404)
 
 
+@app.post("/admin/members/{member_id}/update", dependencies=[Depends(require_admin)])
+async def update_member(
+    member_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """更新成员信息（支持 JSON 提交）"""
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        return JSONResponse(content={"error": "成员不存在"}, status_code=404)
+    try:
+        payload = {}
+        try:
+            payload = await request.json()
+        except Exception:
+            # 回退读取表单
+            form = await request.form()
+            payload = dict(form)
+        name = (payload.get("name") or member.name).strip()
+        department = (payload.get("department") or member.department)
+        position = (payload.get("position") or member.position)
+        email = (payload.get("email") or member.email)
+        phone = (payload.get("phone") or member.phone)
+
+        # 检查重名（唯一约束）
+        if name != member.name:
+            exists = db.query(Member).filter(Member.name == name).first()
+            if exists:
+                return JSONResponse(content={"error": "成员名称已存在"}, status_code=400)
+
+        member.name = name
+        member.department = (department or None)
+        member.position = (position or None)
+        member.email = (email or None)
+        member.phone = (phone.strip() if phone else None)
+        db.commit()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(content={"error": f"更新失败: {str(e)}"}, status_code=400)
+
+
+@app.post("/admin/members/{member_id}/delete", dependencies=[Depends(require_admin)])
+async def delete_member(member_id: int, db: Session = Depends(get_db)):
+    """删除成员：当存在周报关联时阻止删除，避免外键问题"""
+    member = db.query(Member).filter(Member.id == member_id).first()
+    if not member:
+        return JSONResponse(content={"error": "成员不存在"}, status_code=404)
+    try:
+        report_count = db.query(Report).filter(Report.member_id == member_id).count()
+        if report_count > 0:
+            return JSONResponse(content={"error": "该成员存在周报记录，无法删除"}, status_code=400)
+        db.delete(member)
+        db.commit()
+        return JSONResponse(content={"success": True})
+    except Exception as e:
+        db.rollback()
+        return JSONResponse(content={"error": f"删除失败: {str(e)}"}, status_code=400)
+
+
 # 便于测试的钉钉定时发送接口：支持GET/POST
 @app.get("/admin/dingtalk/schedule", dependencies=[Depends(require_admin)])
-async def schedule_dingtalk_get(text: str = "这是一条测试钉钉消息", delay_seconds: int = 0):
+async def schedule_dingtalk_get(text: str = "这是一条测试钉钉消息", delay_seconds: int = 0, db: Session = Depends(get_db)):
     """通过浏览器访问进行快速测试：/admin/dingtalk/schedule?text=...&delay_seconds=5"""
     api_logger.info("API GET schedule dingtalk: delay=%s text_len=%s", delay_seconds, len(text or ""))
-    info = schedule_dingtalk_once(text=text, delay_seconds=delay_seconds)
+    # 从数据库读取活跃成员手机号作为 @ 参数
+    mobiles = [m.phone for m in db.query(Member).filter(Member.is_active == 1, Member.phone != None, Member.phone != "").all()]
+    info = schedule_dingtalk_once(text=text, delay_seconds=delay_seconds, at_mobiles=mobiles)
     return JSONResponse(content=info)
 
 
@@ -211,9 +343,11 @@ async def schedule_dingtalk_get(text: str = "这是一条测试钉钉消息", de
 async def schedule_dingtalk_post(
     text: str = Form("这是一条测试钉钉消息"),
     delay_seconds: int = Form(0),
+    db: Session = Depends(get_db),
 ):
     api_logger.info("API POST schedule dingtalk: delay=%s text_len=%s", delay_seconds, len(text or ""))
-    info = schedule_dingtalk_once(text=text, delay_seconds=delay_seconds)
+    mobiles = [m.phone for m in db.query(Member).filter(Member.is_active == 1, Member.phone != None, Member.phone != "").all()]
+    info = schedule_dingtalk_once(text=text, delay_seconds=delay_seconds, at_mobiles=mobiles)
     return JSONResponse(content=info)
 
 

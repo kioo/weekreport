@@ -71,6 +71,7 @@
                             <th>预计结束时间</th>
                             <th>描述</th>
                             <th>创建时间</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -81,6 +82,18 @@
                             <td>{{ p.expected_end_date.strftime('%Y-%m-%d') if p.expected_end_date else '-' }}</td>
                             <td>{{ p.description or '-' }}</td>
                             <td>{{ p.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <button class="btn" 
+                                    onclick="openEditProject(this)"
+                                    data-id="{{ p.id }}"
+                                    data-name="{{ p.name }}"
+                                    data-description="{{ p.description or '' }}"
+                                    data-start_date="{{ p.start_date.strftime('%Y-%m-%d') if p.start_date else '' }}"
+                                    data-expected_end_date="{{ p.expected_end_date.strftime('%Y-%m-%d') if p.expected_end_date else '' }}">
+                                    编辑
+                                </button>
+                                <button class="btn btn-primary" onclick="openDeleteProjectConfirm(this)" data-id="{{ p.id }}" data-name="{{ p.name }}">删除</button>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -91,5 +104,114 @@
             </div>
         </div>
     </div>
+    <!-- 编辑项目弹窗 -->
+    <div id="editProjectModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.35);">
+        <div style="background: #fff; width: 540px; margin: 10% auto; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <h3 style="margin-top:0;">编辑项目</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="edit_proj_name">项目名称 *</label>
+                    <input type="text" id="edit_proj_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_proj_start">项目起始时间</label>
+                    <input type="date" id="edit_proj_start">
+                </div>
+                <div class="form-group">
+                    <label for="edit_proj_end">预计结束时间</label>
+                    <input type="date" id="edit_proj_end">
+                </div>
+                <div class="form-group" style="grid-column: 1 / span 3;">
+                    <label for="edit_proj_desc">项目描述</label>
+                    <textarea id="edit_proj_desc" rows="3"></textarea>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 12px;">
+                <button class="btn" onclick="hideEditProject()">取消</button>
+                <button class="btn btn-primary" onclick="saveProjectEdit()">保存</button>
+            </div>
+            <input type="hidden" id="edit_proj_id">
+        </div>
+    </div>
+
+    <!-- 删除项目确认弹窗 -->
+    <div id="confirmProjectDelete" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;">
+        <div style="background: #fff; width: 520px; margin: 12% auto; padding: 20px; border-radius: 8px; box-shadow: 0 6px 16px rgba(0,0,0,0.15);">
+            <h3 style="margin-top:0; color:#d93025;">删除项目确认</h3>
+            <p>您正在删除项目：<strong id="confirm_proj_name"></strong></p>
+            <p>为避免误删，请在下方输入该项目名称进行确认。</p>
+            <div class="form-group">
+                <label for="confirm_proj_input">输入项目名称</label>
+                <input type="text" id="confirm_proj_input" placeholder="精确输入项目名称以确认删除">
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 12px;">
+                <button class="btn" onclick="hideDeleteProject()">取消</button>
+                <button class="btn btn-primary" onclick="performProjectDelete()">确认删除</button>
+            </div>
+            <input type="hidden" id="confirm_proj_id">
+        </div>
+    </div>
+
+    <script>
+        function getAdminToken() {
+            const m = document.cookie.match(/(?:^|; )ADMIN_TOKEN=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+
+        function openEditProject(btn) {
+            document.getElementById('edit_proj_id').value = btn.dataset.id;
+            document.getElementById('edit_proj_name').value = btn.dataset.name || '';
+            document.getElementById('edit_proj_start').value = btn.dataset.start_date || '';
+            document.getElementById('edit_proj_end').value = btn.dataset.expected_end_date || '';
+            document.getElementById('edit_proj_desc').value = btn.dataset.description || '';
+            document.getElementById('editProjectModal').style.display = 'block';
+        }
+        function hideEditProject() {
+            document.getElementById('editProjectModal').style.display = 'none';
+        }
+        async function saveProjectEdit() {
+            const id = document.getElementById('edit_proj_id').value;
+            const payload = {
+                name: document.getElementById('edit_proj_name').value.trim(),
+                start_date: document.getElementById('edit_proj_start').value.trim(),
+                expected_end_date: document.getElementById('edit_proj_end').value.trim(),
+                description: document.getElementById('edit_proj_desc').value.trim()
+            };
+            if (!payload.name) { alert('项目名称不能为空'); return; }
+            try {
+                const resp = await fetch(`/admin/projects/${id}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': getAdminToken() },
+                    body: JSON.stringify(payload)
+                });
+                const result = await resp.json();
+                if (result.success) { hideEditProject(); location.reload(); }
+                else { alert('保存失败：' + (result.error || '未知错误')); }
+            } catch (err) { alert('保存失败：' + err.message); }
+        }
+
+        function openDeleteProjectConfirm(btn) {
+            document.getElementById('confirm_proj_id').value = btn.dataset.id;
+            document.getElementById('confirm_proj_name').textContent = btn.dataset.name || '';
+            document.getElementById('confirm_proj_input').value = '';
+            document.getElementById('confirmProjectDelete').style.display = 'block';
+        }
+        function hideDeleteProject() {
+            document.getElementById('confirmProjectDelete').style.display = 'none';
+        }
+        async function performProjectDelete() {
+            const id = document.getElementById('confirm_proj_id').value;
+            const expected = document.getElementById('confirm_proj_name').textContent.trim();
+            const typed = document.getElementById('confirm_proj_input').value.trim();
+            if (!typed) { alert('请输入项目名称以确认删除'); return; }
+            if (typed !== expected) { alert('输入的项目名称不匹配，请重新输入'); return; }
+            try {
+                const resp = await fetch(`/admin/projects/${id}/delete`, { method: 'POST', headers: { 'X-Admin-Token': getAdminToken() } });
+                const result = await resp.json();
+                if (result.success) { hideDeleteProject(); location.reload(); }
+                else { alert('删除失败：' + (result.error || '未知错误')); }
+            } catch (err) { alert('删除失败：' + err.message); }
+        }
+    </script>
 </body>
 </html>

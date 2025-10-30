@@ -232,6 +232,10 @@
                             <label for="email">邮箱</label>
                             <input type="email" id="email" name="email">
                         </div>
+                        <div class="form-group">
+                            <label for="phone">手机号</label>
+                            <input type="text" id="phone" name="phone" placeholder="用于钉钉@提醒">
+                        </div>
                     </div>
                     <button type="submit" class="btn btn-primary">添加成员</button>
                 </form>
@@ -248,6 +252,7 @@
                             <th>部门</th>
                             <th>职位</th>
                             <th>邮箱</th>
+                            <th>手机号</th>
                             <th>状态</th>
                             <th>创建时间</th>
                             <th>操作</th>
@@ -260,6 +265,7 @@
                             <td>{{ member.department or '-' }}</td>
                             <td>{{ member.position or '-' }}</td>
                             <td>{{ member.email or '-' }}</td>
+                            <td>{{ member.phone or '-' }}</td>
                             <td>
                                 <span class="status-badge {% if member.is_active %}status-active{% else %}status-inactive{% endif %}">
                                     {% if member.is_active %}激活{% else %}停用{% endif %}
@@ -268,10 +274,21 @@
                             <td>{{ member.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
                                 <div class="actions">
+                                    <button class="btn btn-secondary" 
+                                            onclick="openEditMember(this)"
+                                            data-id="{{ member.id }}"
+                                            data-name="{{ member.name }}"
+                                            data-department="{{ member.department or '' }}"
+                                            data-position="{{ member.position or '' }}"
+                                            data-email="{{ member.email or '' }}"
+                                            data-phone="{{ member.phone or '' }}">
+                                        编辑
+                                    </button>
                                     <button class="btn {% if member.is_active %}btn-danger{% else %}btn-success{% endif %}" 
                                             onclick="toggleMemberStatus({{ member.id }}, {{ member.is_active }})">
                                         {% if member.is_active %}停用{% else %}激活{% endif %}
                                     </button>
+                                    <button class="btn btn-danger" onclick="openDeleteConfirm(this)" data-id="{{ member.id }}" data-name="{{ member.name }}">删除</button>
                                 </div>
                             </td>
                         </tr>
@@ -287,7 +304,64 @@
         </div>
     </div>
 
+    <!-- 编辑成员弹窗 -->
+    <div id="editModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);">
+        <div style="background: #fff; width: 520px; margin: 10% auto; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+            <h3 style="margin-top:0;">编辑成员</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="edit_name">姓名 *</label>
+                    <input type="text" id="edit_name" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_department">部门</label>
+                    <input type="text" id="edit_department">
+                </div>
+                <div class="form-group">
+                    <label for="edit_position">职位</label>
+                    <input type="text" id="edit_position">
+                </div>
+                <div class="form-group">
+                    <label for="edit_email">邮箱</label>
+                    <input type="email" id="edit_email">
+                </div>
+                <div class="form-group">
+                    <label for="edit_phone">手机号</label>
+                    <input type="text" id="edit_phone" placeholder="用于钉钉@提醒">
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 12px;">
+                <button class="btn" onclick="hideEditModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveEditMember()">保存</button>
+            </div>
+            <input type="hidden" id="edit_id">
+        </div>
+    </div>
+
+    <!-- 删除成员二次确认弹窗 -->
+    <div id="confirmDeleteModal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000;">
+        <div style="background: #fff; width: 520px; margin: 12% auto; padding: 20px; border-radius: 8px; box-shadow: 0 6px 16px rgba(0,0,0,0.15);">
+            <h3 style="margin-top:0; color:#d93025;">删除成员确认</h3>
+            <p>您正在删除成员：<strong id="confirm_del_name"></strong></p>
+            <p>为避免误删，请在下方输入该成员的姓名进行二次确认。</p>
+            <div class="form-group">
+                <label for="confirm_delete_input">输入成员姓名</label>
+                <input type="text" id="confirm_delete_input" placeholder="精确输入姓名以确认删除">
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top: 12px;">
+                <button class="btn" onclick="hideDeleteConfirm()">取消</button>
+                <button class="btn btn-danger" onclick="performDelete()">确认删除</button>
+            </div>
+            <input type="hidden" id="confirm_del_id">
+        </div>
+    </div>
+
     <script>
+        function getAdminToken() {
+            const m = document.cookie.match(/(?:^|; )ADMIN_TOKEN=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+
         async function toggleMemberStatus(memberId, currentStatus) {
             const action = currentStatus ? '停用' : '激活';
             if (!confirm(`确定要${action}该成员吗？`)) {
@@ -299,6 +373,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-Admin-Token': getAdminToken(),
                     }
                 });
 
@@ -311,6 +386,93 @@
                 }
             } catch (error) {
                 alert('操作失败：' + error.message);
+            }
+        }
+
+        function openEditMember(btn) {
+            const id = btn.dataset.id;
+            document.getElementById('edit_id').value = id;
+            document.getElementById('edit_name').value = btn.dataset.name || '';
+            document.getElementById('edit_department').value = btn.dataset.department || '';
+            document.getElementById('edit_position').value = btn.dataset.position || '';
+            document.getElementById('edit_email').value = btn.dataset.email || '';
+            document.getElementById('edit_phone').value = btn.dataset.phone || '';
+            document.getElementById('editModal').style.display = 'block';
+        }
+
+        function hideEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        async function saveEditMember() {
+            const id = document.getElementById('edit_id').value;
+            const payload = {
+                name: document.getElementById('edit_name').value.trim(),
+                department: document.getElementById('edit_department').value.trim(),
+                position: document.getElementById('edit_position').value.trim(),
+                email: document.getElementById('edit_email').value.trim(),
+                phone: document.getElementById('edit_phone').value.trim()
+            };
+
+            if (!payload.name) {
+                alert('姓名不能为空');
+                return;
+            }
+
+            try {
+                const resp = await fetch(`/admin/members/${id}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': getAdminToken() },
+                    body: JSON.stringify(payload)
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    hideEditModal();
+                    location.reload();
+                } else {
+                    alert('保存失败：' + (result.error || '未知错误'));
+                }
+            } catch (err) {
+                alert('保存失败：' + err.message);
+            }
+        }
+
+        function openDeleteConfirm(btn) {
+            const id = btn.dataset.id;
+            const name = btn.dataset.name || '';
+            document.getElementById('confirm_del_id').value = id;
+            document.getElementById('confirm_del_name').textContent = name;
+            document.getElementById('confirm_delete_input').value = '';
+            document.getElementById('confirmDeleteModal').style.display = 'block';
+        }
+
+        function hideDeleteConfirm() {
+            document.getElementById('confirmDeleteModal').style.display = 'none';
+        }
+
+        async function performDelete() {
+            const id = document.getElementById('confirm_del_id').value;
+            const expected = document.getElementById('confirm_del_name').textContent.trim();
+            const typed = document.getElementById('confirm_delete_input').value.trim();
+            if (!typed) {
+                alert('请输入成员姓名以确认删除');
+                return;
+            }
+            if (typed !== expected) {
+                alert('输入的姓名与成员不匹配，请重新输入');
+                return;
+            }
+            try {
+                const resp = await fetch(`/admin/members/${id}/delete`, { method: 'POST', headers: { 'X-Admin-Token': getAdminToken() } });
+                const result = await resp.json();
+                if (result.success) {
+                    hideDeleteConfirm();
+                    location.reload();
+                } else {
+                    alert('删除失败：' + (result.error || '未知错误'));
+                }
+            } catch (err) {
+                alert('删除失败：' + err.message);
             }
         }
     </script>

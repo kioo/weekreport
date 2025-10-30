@@ -29,6 +29,7 @@ class Member(Base):
     department = Column(String(100), nullable=True)
     position = Column(String(100), nullable=True)
     email = Column(String(200), nullable=True)
+    phone = Column(String(20), nullable=True)
     is_active = Column(Integer, default=1)  # 1=active, 0=inactive
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -53,6 +54,16 @@ class Report(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # 轻量级迁移：确保 members 表存在 phone 字段（SQLite）
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            res = conn.execute(text("PRAGMA table_info(members)")).fetchall()
+            cols = [r[1] for r in res]  # 第二列为列名
+            if "phone" not in cols:
+                conn.execute(text("ALTER TABLE members ADD COLUMN phone VARCHAR(20)"))
+    except Exception as e:
+        print(f"检查/添加 phone 字段失败: {e}")
     
     # 初始化默认成员数据
     db = SessionLocal()
