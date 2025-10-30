@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Float, ForeignKey
+from sqlalchemy import Date
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -9,6 +10,16 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./weekreports.db")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    start_date = Column(Date, nullable=True)
+    expected_end_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Member(Base):
     __tablename__ = "members"
@@ -57,6 +68,19 @@ def init_db():
             ]
             for member in default_members:
                 db.add(member)
+            db.commit()
+
+        # 初始化默认项目数据
+        if db.query(Project).count() == 0:
+            default_projects = [
+                Project(name="支付系统升级", description="支付通道整合与性能优化"),
+                Project(name="核心平台", description="核心服务平台建设"),
+                Project(name="移动端App", description="移动客户端迭代"),
+                Project(name="数据治理", description="数据质量与标准化治理"),
+                Project(name="运营后台", description="运营支撑后台优化"),
+            ]
+            for proj in default_projects:
+                db.add(proj)
             db.commit()
     except Exception as e:
         db.rollback()

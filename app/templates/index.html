@@ -35,26 +35,27 @@
     <div class="title">周报填写</div>
 
     <div class="topbar">
-      <span class="small">填写人</span>
-      <select id="memberSelect" style="width:220px;">
-        <option value="">请选择成员</option>
-        {% for member in members %}
-        <option value="{{ member.id }}" data-name="{{ member.name }}">
-          {{ member.name }}{% if member.department %} - {{ member.department }}{% endif %}{% if member.position %} ({{ member.position }}){% endif %}
-        </option>
-        {% endfor %}
-      </select>
-      <input type="hidden" id="memberName" />
-      <!-- 测试钉钉消息按钮：安排5秒后发送测试消息 -->
-      <button type="button" id="testDingTalkBtn" style="padding:8px 12px;border:none;border-radius:8px;background:#10b981;color:#fff;cursor:pointer;">测试钉钉消息</button>
-      <!-- 测试邮件发送按钮：安排2秒后触发周报邮件发送 -->
-      <button type="button" id="testEmailBtn" style="padding:8px 12px;margin-left:8px;border:none;border-radius:8px;background:#3b82f6;color:#fff;cursor:pointer;">测试邮件发送</button>
+      <!-- 顶部工具栏已精简，相关管理操作入口弱化并移至左下 -->
     </div>
 
     <form id="reportForm" action="/submit" method="post">
       <!-- 本周工作内容 -->
       <div class="card">
-        <div class="section-title">本周工作内容</div>
+        <div class="section-bar">
+          <div class="section-title">本周工作内容</div>
+          <div class="assignee-inline">
+            <span class="assignee-label">填写人</span>
+            <select id="memberSelect" class="assignee-select">
+              <option value="">请选择成员</option>
+              {% for member in members %}
+              <option value="{{ member.id }}" data-name="{{ member.name }}">
+                {{ member.name }}{% if member.department %} - {{ member.department }}{% endif %}{% if member.position %} ({{ member.position }}){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <input type="hidden" id="memberName" />
+          </div>
+        </div>
         <div id="workItems"></div>
         <span class="add-link" id="addWork">+ 添加另一项</span>
       </div>
@@ -93,9 +94,302 @@
   </div>
 
   <script>
-    const projectOptions = [
-      "支付系统升级", "核心平台", "移动端App", "数据治理", "运营后台"
-    ];
+    let projectOptions = [];
+    let memberOptions = [];
+    // 侧边弹窗样式与结构
+    const drawerStyles = `
+      .drawer-overlay { position: fixed; inset:0; background: rgba(0,0,0,0.25); display: none; }
+      .drawer { position: fixed; top:0; right:0; width: 360px; height: 100%; background:#fff; box-shadow: -4px 0 12px rgba(0,0,0,0.1); display:none; }
+      .drawer header { padding: 14px 16px; border-bottom: 1px solid #e5e7eb; font-weight: 600; }
+      .drawer .content { padding: 12px 16px; }
+      .drawer .form-row { display:flex; flex-direction:column; gap: 10px; }
+      .drawer label { font-size:12px; color:#6b7280; margin-bottom:6px; }
+      .drawer input, .drawer textarea { width:100%; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; }
+      .drawer .actions { display:flex; gap:10px; padding: 12px 16px; border-top: 1px solid #e5e7eb; }
+      .btn { display:inline-block; padding:8px 12px; border-radius:8px; cursor:pointer; border:none; }
+      .btn-primary { background:#2563eb; color:#fff; }
+      .btn-secondary { background:#e5e7eb; color:#111827; }
+      /* 固定右上角填写人选择区域样式 */
+      .assignee-box { position: fixed; top: 16px; right: 16px; display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: #fff; border: 2px solid #2563eb; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); z-index: 50; }
+      .assignee-label { font-size: 16px; font-weight: 800; color: #2563eb; }
+      .assignee-select { width: 320px; font-size: 16px; padding: 12px 14px; border-radius: 12px; }
+      .section-bar { display:flex; justify-content:space-between; align-items:center; }
+      .assignee-inline { display:flex; align-items:center; gap:12px; }
+    `;
+    const styleTag = document.createElement('style');
+    styleTag.innerText = drawerStyles;
+    document.head.appendChild(styleTag);
+
+    // 管理登录模态样式
+    const loginStyles = `
+      .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); display:none; z-index:100; }
+      .modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:360px; background:#fff; border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,0.18); display:none; z-index:101; }
+      .modal header { padding:12px 14px; border-bottom:1px solid #e5e7eb; font-weight:700; }
+      .modal .content { padding:14px; }
+      .modal .actions { display:flex; justify-content:flex-end; gap:10px; padding:12px 14px; border-top:1px solid #e5e7eb; }
+      .modal input { width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:8px; }
+      .btn { display:inline-block; padding:8px 12px; border-radius:8px; cursor:pointer; border:none; }
+      .btn-primary { background:#2563eb; color:#fff; }
+      .btn-secondary { background:#e5e7eb; color:#111827; }
+      .error-text { color:#ef4444; font-size:12px; margin-top:6px; min-height:16px; }
+    `;
+    const loginStyleTag = document.createElement('style');
+    loginStyleTag.innerText = loginStyles;
+    document.head.appendChild(loginStyleTag);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'drawer-overlay';
+    const drawer = document.createElement('div');
+    drawer.className = 'drawer';
+    drawer.innerHTML = `
+      <header>新增项目</header>
+      <div class="content">
+        <div class="form-row">
+          <div>
+            <label>项目名称 *</label>
+            <input type="text" id="drawer_name" />
+          </div>
+          <div>
+            <label>项目起始时间</label>
+            <input type="date" id="drawer_start_date" />
+          </div>
+          <div>
+            <label>预计结束时间</label>
+            <input type="date" id="drawer_expected_end_date" />
+          </div>
+          <div>
+            <label>项目描述</label>
+            <textarea id="drawer_description" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary" id="drawer_cancel">取消</button>
+        <button class="btn btn-primary" id="drawer_submit">添加项目</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.body.appendChild(drawer);
+
+    // 管理登录模态结构
+    const loginOverlay = document.createElement('div');
+    loginOverlay.className = 'modal-overlay';
+    const loginModal = document.createElement('div');
+    loginModal.className = 'modal';
+    loginModal.innerHTML = `
+      <header>管理登录</header>
+      <div class="content">
+        <label style="font-size:12px;color:#6b7280;">请输入管理密码</label>
+        <input type="password" id="admin_token_input" placeholder="密码" />
+        <div class="error-text" id="admin_login_error"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary" id="admin_login_cancel">取消</button>
+        <button class="btn btn-primary" id="admin_login_submit">登录</button>
+      </div>
+    `;
+    document.body.appendChild(loginOverlay);
+    document.body.appendChild(loginModal);
+    // 管理中心入口：点击打开模态，提交到 /admin/login 设置 Cookie 后跳转
+    (function(){
+      function showLogin(){ loginOverlay.style.display='block'; loginModal.style.display='block'; }
+      function hideLogin(){ loginOverlay.style.display='none'; loginModal.style.display='none'; }
+      // 使用事件委托，避免元素在脚本后插入导致绑定失败
+      document.addEventListener('click', function(e){
+        const target = e.target.closest('#openAdminBtn');
+        if (target) { e.preventDefault(); showLogin(); }
+      });
+      loginOverlay.addEventListener('click', hideLogin);
+      loginModal.querySelector('#admin_login_cancel').addEventListener('click', hideLogin);
+      loginModal.querySelector('#admin_login_submit').addEventListener('click', async function(){
+        const input = loginModal.querySelector('#admin_token_input');
+        const errorEl = loginModal.querySelector('#admin_login_error');
+        const token = input.value.trim();
+        if (!token) { errorEl.textContent = '请输入密码'; return; }
+        const fd = new FormData(); fd.append('token', token);
+        try {
+          const resp = await fetch('/admin/login', { method:'POST', body: fd, redirect: 'follow' });
+          if (resp.redirected) {
+            window.location.href = resp.url; // 通常是 /admin
+          } else {
+            const data = await resp.json().catch(()=>({}));
+            errorEl.textContent = data.error || '登录失败';
+          }
+        } catch (e) {
+          errorEl.textContent = '网络或服务错误';
+        }
+      });
+    })();
+
+    function showDrawer(){ overlay.style.display='block'; drawer.style.display='block'; }
+    function hideDrawer(){ overlay.style.display='none'; drawer.style.display='none'; }
+    overlay.addEventListener('click', hideDrawer);
+    const openProjectBtn = document.getElementById('openProjectDrawerBtn');
+    if (openProjectBtn) { openProjectBtn.addEventListener('click', showDrawer); }
+    drawer.querySelector('#drawer_cancel').addEventListener('click', hideDrawer);
+    drawer.querySelector('#drawer_submit').addEventListener('click', async function(){
+      const name = drawer.querySelector('#drawer_name').value.trim();
+      const description = drawer.querySelector('#drawer_description').value.trim();
+      const start_date = drawer.querySelector('#drawer_start_date').value.trim();
+      const expected_end_date = drawer.querySelector('#drawer_expected_end_date').value.trim();
+      if (!name) { alert('请输入项目名称'); return; }
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('description', description);
+      fd.append('start_date', start_date);
+      fd.append('expected_end_date', expected_end_date);
+      try {
+        const resp = await fetch('/admin/projects/add', { method: 'POST', body: fd });
+        if (resp.redirected) {
+          await loadProjects();
+          // 更新所有工作项的项目下拉，并默认选中新项目
+          document.querySelectorAll('.work-project').forEach(sel => {
+            renderProjectSelectOptions(sel, name);
+          });
+          hideDrawer();
+          alert('项目已添加并更新下拉列表');
+        } else {
+          const data = await resp.json().catch(()=>({}));
+          alert('添加项目失败：' + (data.error || resp.status));
+        }
+      } catch (err) {
+        alert('请求失败，请检查网络或服务。');
+      }
+    });
+
+    // 成员新增侧边弹窗
+    const overlayMember = document.createElement('div');
+    overlayMember.className = 'drawer-overlay';
+    const memberDrawer = document.createElement('div');
+    memberDrawer.className = 'drawer';
+    memberDrawer.innerHTML = `
+      <header>新增成员</header>
+      <div class="content">
+        <div class="form-row">
+          <div>
+            <label>姓名 *</label>
+            <input type="text" id="member_name" />
+          </div>
+          <div>
+            <label>部门</label>
+            <input type="text" id="member_department" />
+          </div>
+          <div>
+            <label>职位</label>
+            <input type="text" id="member_position" />
+          </div>
+          <div>
+            <label>邮箱</label>
+            <input type="email" id="member_email" />
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary" id="member_cancel">取消</button>
+        <button class="btn btn-primary" id="member_submit">添加成员</button>
+      </div>
+    `;
+    document.body.appendChild(overlayMember);
+    document.body.appendChild(memberDrawer);
+    function showMemberDrawer(){ overlayMember.style.display='block'; memberDrawer.style.display='block'; }
+    function hideMemberDrawer(){ overlayMember.style.display='none'; memberDrawer.style.display='none'; }
+    overlayMember.addEventListener('click', hideMemberDrawer);
+    memberDrawer.querySelector('#member_cancel').addEventListener('click', hideMemberDrawer);
+    const openMemberBtn = document.getElementById('openMemberDrawerBtn');
+    if (openMemberBtn) { openMemberBtn.addEventListener('click', showMemberDrawer); }
+    memberDrawer.querySelector('#member_submit').addEventListener('click', async function(){
+      const name = memberDrawer.querySelector('#member_name').value.trim();
+      const department = memberDrawer.querySelector('#member_department').value.trim();
+      const position = memberDrawer.querySelector('#member_position').value.trim();
+      const email = memberDrawer.querySelector('#member_email').value.trim();
+      if (!name) { alert('请输入成员姓名'); return; }
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('department', department);
+      fd.append('position', position);
+      fd.append('email', email);
+      try {
+        const resp = await fetch('/admin/members/add', { method: 'POST', body: fd });
+        if (resp.redirected) {
+          await loadMembers();
+          const selectEl = document.getElementById('memberSelect');
+          if (selectEl) {
+            // 新增后，按姓名选中该成员
+            renderMemberSelectOptions(selectEl);
+            const newly = memberOptions.find(m=>m.name===name);
+            if (newly) selectEl.value = String(newly.id);
+          }
+          hideMemberDrawer();
+          alert('成员已添加并更新列表');
+        } else {
+          const data = await resp.json().catch(()=>({}));
+          alert('添加成员失败：' + (data.error || resp.status));
+        }
+      } catch (err) {
+        alert('请求失败，请检查网络或服务。');
+      }
+    });
+    async function loadProjects(){
+      try {
+        const resp = await fetch('/api/projects');
+        const data = await resp.json();
+        projectOptions = Array.isArray(data) ? data.map(p=>p.name) : [];
+      } catch (e) {
+        projectOptions = [];
+      }
+    }
+
+    async function loadMembers(){
+      try {
+        const resp = await fetch('/api/members');
+        const data = await resp.json();
+        memberOptions = Array.isArray(data) ? data : [];
+      } catch (e) {
+        memberOptions = [];
+      }
+    }
+
+    function renderMemberSelectOptions(selectEl){
+      const optionsHtml = [
+        `<option value="">请选择成员</option>`,
+        ...memberOptions.map(m=>{
+          const suffixDept = m.department ? ` - ${m.department}` : '';
+          const suffixPos = m.position ? ` (${m.position})` : '';
+          return `<option value="${m.id}" data-name="${m.name}">${m.name}${suffixDept}${suffixPos}</option>`;
+        }),
+        `<option value="__ADD_MEMBER__">+ 新增成员...</option>`
+      ].join('');
+      selectEl.innerHTML = optionsHtml;
+      // 若之前已有选择，不强制覆盖
+    }
+
+    function renderProjectSelectOptions(selectEl, selectedName){
+      const optionsHtml = [
+        `<option value="">请选择所属项目</option>`,
+        ...projectOptions.map(o=>`<option value="${o}">${o}</option>`),
+        `<option value="__ADD_NEW__">+ 新增项目...</option>`
+      ].join('');
+      selectEl.innerHTML = optionsHtml;
+      if (selectedName) {
+        selectEl.value = selectedName;
+      } else {
+        selectEl.value = "";
+      }
+    }
+
+    async function handleAddNewProjectViaSelect(currentSelect){
+      // 改为打开侧边弹窗进行更友好的输入
+      showDrawer();
+      // 选择新增项后，默认将新增成功时选中当前选择器为新项目
+      const submitBtn = drawer.querySelector('#drawer_submit');
+      const handler = async function(){
+        // 此处的提交逻辑在统一的提交按钮处理，无需重复实现
+        submitBtn.removeEventListener('click', handler);
+      };
+      submitBtn.addEventListener('click', handler);
+      // 重置当前选择避免误提交
+      currentSelect.value = "";
+    }
 
     function createWorkItem(index){
       const wrap = document.createElement('div');
@@ -106,7 +400,7 @@
         <div class="row">
           <div>
             <label>所属项目</label>
-            <select class="work-project">${projectOptions.map(o=>`<option>${o}</option>`).join('')}</select>
+            <select class="work-project"></select>
           </div>
           <div>
             <label>工作描述</label>
@@ -124,6 +418,15 @@
       const range = wrap.querySelector('.work-progress');
       const percent = wrap.querySelector('.percent');
       range.addEventListener('input', ()=>{ percent.textContent = range.value + '%'; });
+
+      // 渲染项目下拉并绑定新增项目快捷入口
+      const projSelect = wrap.querySelector('.work-project');
+      renderProjectSelectOptions(projSelect);
+      projSelect.addEventListener('change', async function(){
+        if (this.value === '__ADD_NEW__') {
+          await handleAddNewProjectViaSelect(this);
+        }
+      });
       return wrap;
     }
 
@@ -145,6 +448,15 @@
             </div>
           </div>
         </div>`;
+      // 使点击整个输入区域均能打开日期选择器
+      const dateEl = wrap.querySelector('.plan-date');
+      if (dateEl) {
+        ['click','focus'].forEach(ev => dateEl.addEventListener(ev, () => {
+          if (typeof dateEl.showPicker === 'function') {
+            dateEl.showPicker();
+          }
+        }));
+      }
       return wrap;
     }
 
@@ -163,9 +475,41 @@
     document.getElementById('addWork').addEventListener('click', addWork);
     document.getElementById('addPlan').addEventListener('click', addPlan);
 
-    // 初始化各一项
-    addWork();
-    addPlan();
+    // 全局增强：对所有日期输入启用“点击整块即打开选择器”
+    function enableGlobalDatePickerOpen(){
+      function maybeOpen(el){
+        if (el && el.tagName === 'INPUT' && el.type === 'date' && typeof el.showPicker === 'function') {
+          el.showPicker();
+        }
+      }
+      document.addEventListener('click', function(e){
+        maybeOpen(e.target);
+      }, true);
+      document.addEventListener('focusin', function(e){
+        maybeOpen(e.target);
+      });
+    }
+    enableGlobalDatePickerOpen();
+
+    // 顶部“新增项目”按钮改为使用侧边弹窗（已在模板中渲染 id=openProjectDrawerBtn）
+
+    // 初始化：加载成员与项目后再渲染工作/计划项
+    (async function(){
+      await loadMembers();
+      const memberSelectEl = document.getElementById('memberSelect');
+      if (memberSelectEl) {
+        renderMemberSelectOptions(memberSelectEl);
+        memberSelectEl.addEventListener('change', async function(){
+          if (this.value === '__ADD_MEMBER__') {
+            showMemberDrawer();
+            this.value = '';
+          }
+        });
+      }
+      await loadProjects();
+      addWork();
+      addPlan();
+    })();
 
     // 测试钉钉消息按钮逻辑
     const testBtn = document.getElementById('testDingTalkBtn');
@@ -250,5 +594,10 @@
       document.getElementById('risks').value = risks;
     });
   </script>
+  <!-- 页面底部左侧的“管理中心”圆形弱化入口（非浮动） -->
+  <a id="openAdminBtn" href="/admin" title="管理中心" aria-label="管理中心"
+     style="display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; border:1px solid #e5e7eb; background:#f9fafb; color:#6b7280; text-decoration:none; box-shadow:none; opacity:0.9; margin:16px;">
+    ⚙️
+  </a>
 </body>
 </html>

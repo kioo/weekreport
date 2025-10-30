@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理中心</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Helvetica, Arial; background:#f7f9fc; color:#1f2937; margin:0; }
+    .container { max-width: 1200px; margin: 24px auto; background:#fff; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.08); overflow:hidden; }
+    .header { background:#4f46e5; color:#fff; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; }
+    .header h1 { font-size:20px; margin:0; font-weight:700; }
+    .nav { display:flex; gap:12px; }
+    .nav a { color:#fff; text-decoration:none; padding:8px 12px; border-radius:8px; background:rgba(255,255,255,0.18); }
+    .tabs { display:flex; gap:10px; padding:12px 16px; border-bottom:1px solid #e5e7eb; }
+    .tab { padding:8px 12px; border-radius:8px; cursor:pointer; background:#eef2ff; color:#3730a3; font-weight:600; }
+    .tab.active { background:#4f46e5; color:#fff; }
+    .content { padding:16px; }
+    .pane { display:none; }
+    .pane.active { display:block; }
+    iframe { width:100%; height: calc(100vh - 220px); border:none; border-radius:8px; background:#f8fafc; }
+    .card { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
+    .btn { display:inline-block; padding:8px 12px; border-radius:8px; cursor:pointer; border:none; }
+    .btn-green { background:#10b981; color:#fff; }
+    .btn-blue { background:#3b82f6; color:#fff; }
+    .actions { display:flex; gap:10px; }
+    .muted { color:#6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>管理中心</h1>
+      <div class="nav">
+        <a href="/">返回首页</a>
+        <a href="/admin/summary" target="_blank">查看汇总</a>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" data-target="#pane-members">成员管理</div>
+      <div class="tab" data-target="#pane-projects">项目管理</div>
+      <div class="tab" data-target="#pane-tools">消息测试</div>
+    </div>
+    <div class="content">
+      <div id="pane-members" class="pane active">
+        <iframe src="/admin/members" title="成员管理"></iframe>
+      </div>
+      <div id="pane-projects" class="pane">
+        <iframe src="/admin/projects" title="项目管理"></iframe>
+      </div>
+      <div id="pane-tools" class="pane">
+        <div class="card">
+          <div class="muted" style="margin-bottom:8px;">用于快速验证钉钉与邮件调度接口</div>
+          <div class="actions">
+            <button type="button" id="testDingTalkBtn" class="btn btn-green">测试钉钉消息</button>
+            <button type="button" id="testEmailBtn" class="btn btn-blue">测试邮件发送</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 标签页切换
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+        document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.getAttribute('data-target');
+        const pane = document.querySelector(target);
+        if (pane) pane.classList.add('active');
+      });
+    });
+
+    // 工具页按钮逻辑
+    const testDingTalkBtn = document.getElementById('testDingTalkBtn');
+    const testEmailBtn = document.getElementById('testEmailBtn');
+
+    if (testDingTalkBtn) {
+      testDingTalkBtn.addEventListener('click', async function(){
+        const btn = this; btn.disabled = true; btn.textContent = '已安排...';
+        try {
+          const resp = await fetch(`/admin/dingtalk/schedule?delay_seconds=5`);
+          const data = await resp.json();
+          alert(`钉钉消息已安排：${data.scheduled ? '是' : '否'}\n执行时间：${data.run_at || '-'}`);
+        } catch (e) { alert('调用失败，请检查服务器或网络。'); }
+        finally { btn.disabled = false; btn.textContent = '测试钉钉消息'; }
+      });
+    }
+
+    if (testEmailBtn) {
+      testEmailBtn.addEventListener('click', async function(){
+        const btn = this; btn.disabled = true; btn.textContent = '已安排...';
+        try {
+          const resp = await fetch(`/admin/email/schedule?delay_seconds=2`);
+          const data = await resp.json();
+          alert(`周报邮件已安排：${data.scheduled ? '是' : '否'}\n执行时间：${data.run_at || '-'}`);
+        } catch (e) { alert('调用失败，请检查服务器或网络。'); }
+        finally { btn.disabled = false; btn.textContent = '测试邮件发送'; }
+      });
+    }
+  </script>
+</body>
+</html>

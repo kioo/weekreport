@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>项目管理</title>
+    <style>
+        body { font-family: system-ui, -apple-system, Segoe UI, Helvetica, Arial; background:#f7f9fc; color:#1f2937; }
+        .container { max-width: 1000px; margin: 20px auto; }
+        .header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 16px; }
+        .nav-links a { color:#2563eb; text-decoration:none; margin-left: 12px; }
+        .card { background:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.06); padding:18px; margin-bottom:16px; }
+        .form-row { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .form-group { display:flex; flex-direction:column; }
+        .form-group label { font-size:12px; color:#6b7280; margin-bottom:6px; }
+        .form-group input, .form-group textarea { padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px; }
+        .btn { display:inline-block; padding:8px 12px; border-radius:8px; cursor:pointer; border:none; }
+        .btn-primary { background:#2563eb; color:#fff; }
+        table { width:100%; border-collapse: collapse; }
+        th, td { border-bottom:1px solid #e5e7eb; padding:10px; text-align:left; vertical-align:top; }
+        th { background:#f3f4f6; font-weight:600; }
+        .muted { color:#6b7280; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>项目管理</h1>
+            <div class="nav-links">
+                <a href="/">返回首页</a>
+                <a href="/admin/summary">查看汇总</a>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- 添加项目表单 -->
+            <div class="card">
+                <h2>添加新项目</h2>
+                <form action="/admin/projects/add" method="post">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="name">项目名称 *</label>
+                            <input type="text" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="start_date">项目起始时间</label>
+                            <input type="date" id="start_date" name="start_date">
+                        </div>
+                        <div class="form-group">
+                            <label for="expected_end_date">预计结束时间</label>
+                            <input type="date" id="expected_end_date" name="expected_end_date">
+                        </div>
+                        <div class="form-group">
+                            <label for="description">项目描述</label>
+                            <textarea id="description" name="description" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">添加项目</button>
+                </form>
+            </div>
+
+            <!-- 项目列表 -->
+            <div class="card">
+                <h2>项目列表</h2>
+                {% if projects %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>项目名称</th>
+                            <th>起始时间</th>
+                            <th>预计结束时间</th>
+                            <th>描述</th>
+                            <th>创建时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in projects %}
+                        <tr>
+                            <td>{{ p.name }}</td>
+                            <td>{{ p.start_date.strftime('%Y-%m-%d') if p.start_date else '-' }}</td>
+                            <td>{{ p.expected_end_date.strftime('%Y-%m-%d') if p.expected_end_date else '-' }}</td>
+                            <td>{{ p.description or '-' }}</td>
+                            <td>{{ p.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="muted">当前暂无项目，请先在上方添加。</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
