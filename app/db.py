@@ -2,12 +2,17 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, F
 from sqlalchemy import Date
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy import inspect
 from datetime import datetime
 import os
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./weekreports.db")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# 根据数据库类型设置引擎参数（SQLite 需要 check_same_thread，其他如 PostgreSQL 不需要）
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -54,13 +59,13 @@ class Report(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    # 轻量级迁移：确保 members 表存在 phone 字段（SQLite）
+    # 轻量级迁移：确保 members 表存在 phone 字段（跨数据库）
     try:
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            res = conn.execute(text("PRAGMA table_info(members)")).fetchall()
-            cols = [r[1] for r in res]  # 第二列为列名
-            if "phone" not in cols:
+        insp = inspect(engine)
+        cols = [c.get("name") for c in insp.get_columns("members")]
+        if "phone" not in cols:
+            from sqlalchemy import text
+            with engine.connect() as conn:
                 conn.execute(text("ALTER TABLE members ADD COLUMN phone VARCHAR(20)"))
     except Exception as e:
         print(f"检查/添加 phone 字段失败: {e}")

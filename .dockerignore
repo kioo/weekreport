@@ -1,0 +1,25 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv
+venv
+
+# VCS & OS
+.git
+.gitignore
+.DS_Store
+
+# Envs
+.env
+
+# Local data
+weekreports.db
+data/
+
+# Others
+node_modules
+dist
+build

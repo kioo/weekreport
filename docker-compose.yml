@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: weekreport-web
+    ports:
+      - "8000:8000"
+    # 加载应用相关环境变量（钉钉、邮件、LLM 等）
+    env_file:
+      - .env
+    environment:
+      # 使用宿主机持久化的 SQLite 文件（推荐开发/个人使用）
+      - DATABASE_URL=sqlite:////data/weekreports.db
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    command: >-
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+      --proxy-headers --forwarded-allow-ips='*'
