@@ -135,7 +135,7 @@ async def projects_management(request: Request, db: Session = Depends(get_db)):
     projects = db.query(Project).order_by(Project.created_at.desc()).all()
     return templates.TemplateResponse("projects.html", {"request": request, "projects": projects})
 
-@app.post("/admin/projects/add", dependencies=[Depends(require_admin)])
+@app.post("/admin/projects/add")
 async def add_project(
     name: str = Form(...),
     description: str = Form(""),
@@ -233,7 +233,7 @@ async def delete_project(project_id: int, db: Session = Depends(get_db)):
         db.rollback()
         return JSONResponse(content={"error": f"删除失败: {str(e)}"}, status_code=400)
 
-@app.post("/admin/members/add", dependencies=[Depends(require_admin)])
+@app.post("/admin/members/add")
 async def add_member(
     name: str = Form(...),
     department: str = Form(""),
